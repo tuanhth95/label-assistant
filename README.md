@@ -1,14 +1,21 @@
-# label-assistant README
-
-This is the README for your extension "label-assistant". After writing up a brief description, we recommend including the following sections.
+# Labeling Assistant
 
 ## Features
+label data from remote server
 
 ## how to run
+### setup ssh tunneling
+open new cmd and type: `ssh -L 8765:localhost:8765 <user>@<sshserver>` and type password
+not stop ssh session
+### debug extension
 ```
 cd label-assistant
 npm install
 npm run compile # or Ctrl+Shift+B
 press F5 # in code view
 ```
+### release extension
+1. `npm install -g @vscode/vsce`
+2. `vsce package`
+3. install from VSIX with created .vsix file
 

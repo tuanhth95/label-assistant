@@ -82,7 +82,7 @@ function getWebviewContent() {
             const labelInput = document.getElementById('labelInput');
 
             // Thay 'YOUR_SERVER_IP' bằng IP của server remote
-            const ws = new WebSocket('ws://YOUR_SERVER_IP:8765');
+            const ws = new WebSocket('ws://localhost:8765');
             let currentText = "";
 
             ws.onopen = () => {
