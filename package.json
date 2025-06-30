@@ -9,13 +9,15 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:label-assistant.start"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "label-assistant.helloWorld",
-        "title": "Hello World"
+        "command": "label-assistant.start",
+        "title": "Start Labeling Assistant"
       }
     ]
   },
