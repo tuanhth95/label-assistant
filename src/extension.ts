@@ -1,6 +1,8 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -16,136 +18,58 @@ export function activate(context: vscode.ExtensionContext) {
 	const disposable = vscode.commands.registerCommand('label-assistant.start', () => {
 
 		const panel = vscode.window.createWebviewPanel(
-            'labelAssistant', // Định danh của webview
-            'Labeling Assistant', // Tiêu đề hiển thị trên tab
-            vscode.ViewColumn.One, // Hiển thị ở cột editor chính
+            'labelAssistant',
+            'Labeling Assistant',
+            vscode.ViewColumn.One,
             {
-                enableScripts: true // Cho phép chạy JavaScript trong webview
+                enableScripts: true,
+                // Chỉ cho phép webview tải tài nguyên từ thư mục webview-ui
+                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view')]
             }
         );
 
-        // Đặt nội dung HTML cho webview
-        panel.webview.html = getWebviewContent();
+        // Cập nhật nội dung webview
+        panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
 	});
 
 	context.subscriptions.push(disposable);
 }
 
-function getWebviewContent() {
-    // Đây là nơi chúng ta sẽ viết toàn bộ giao diện và logic client
-    // Hãy nhớ thay 'YOUR_SERVER_IP' bằng địa chỉ IP public của server remote
-    return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Labeling Assistant</title>
-        <style>
-            body { font-family: sans-serif; padding: 20px; }
-            #data-container {
-                border: 1px solid #ccc;
-                padding: 15px;
-                margin-top: 15px;
-                min-height: 100px;
-                background-color: #f5f5f5;
-                white-space: pre-wrap; /* Giữ nguyên định dạng xuống dòng */
-            }
-            .controls { margin-top: 15px; }
-            input, button { font-size: 1em; padding: 8px; }
-        </style>
-    </head>
-    <body>
-        <h1>Labeling Assistant</h1>
-        <p>Connect to the remote server to get and label data.</p>
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
+    // Lấy đường dẫn đến các file trên đĩa
+    const webviewUiPath = vscode.Uri.joinPath(extensionUri, 'view');
+    const htmlPath = vscode.Uri.joinPath(webviewUiPath, 'index.html');
+    const cssUri = vscode.Uri.joinPath(webviewUiPath, 'main.css');
+    const scriptUri = vscode.Uri.joinPath(webviewUiPath, 'main.js');
+    
+    // Chuyển các đường dẫn trên đĩa thành URI mà webview có thể hiểu được
+    const styleWebviewUri = webview.asWebviewUri(cssUri);
+    const scriptWebviewUri = webview.asWebviewUri(scriptUri);
 
-        <div id="status">Status: Disconnected</div>
-        
-        <div id="data-container">
-            Waiting for data...
-        </div>
+    // Tạo một nonce để cho phép các script cụ thể được chạy
+    const nonce = getNonce();
 
-        <div class="controls">
-            <button id="getDataBtn">Get Next Data</button>
-        </div>
+    // Đọc nội dung file HTML
+    let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
 
-        <div class="controls">
-            <input type="text" id="labelInput" placeholder="Enter label here..." />
-            <button id="submitBtn">Submit Label</button>
-        </div>
+    // Thay thế các biến giữ chỗ trong HTML bằng các giá trị đúng
+    htmlContent = htmlContent
+        .replace('{{cspSource}}', webview.cspSource)
+        .replace(/{{nonce}}/g, nonce)
+        .replace('{{styleUri}}', styleWebviewUri.toString())
+        .replace('{{scriptUri}}', scriptWebviewUri.toString());
 
-        <script>
-            const statusDiv = document.getElementById('status');
-            const dataContainer = document.getElementById('data-container');
-            const getDataBtn = document.getElementById('getDataBtn');
-            const submitBtn = document.getElementById('submitBtn');
-            const labelInput = document.getElementById('labelInput');
+    return htmlContent;
+}
 
-            // Thay 'YOUR_SERVER_IP' bằng IP của server remote
-            const ws = new WebSocket('ws://localhost:8765');
-            let currentText = "";
-
-            ws.onopen = () => {
-                statusDiv.textContent = 'Status: Connected to server!';
-                statusDiv.style.color = 'green';
-            };
-
-            ws.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                console.log('Received from server:', message);
-
-                if (message.type === 'data') {
-                    currentText = message.payload;
-                    dataContainer.textContent = currentText;
-                } else if (message.type === 'status') {
-                    statusDiv.textContent = 'Status: ' + message.payload;
-                }
-            };
-
-            ws.onclose = () => {
-                statusDiv.textContent = 'Status: Disconnected from server.';
-                statusDiv.style.color = 'red';
-            };
-
-            ws.onerror = (error) => {
-                statusDiv.textContent = 'Status: Connection Error!';
-                statusDiv.style.color = 'red';
-                console.error('WebSocket Error:', error);
-            };
-
-            // Gửi lệnh yêu cầu dữ liệu
-            getDataBtn.addEventListener('click', () => {
-                const command = { action: 'get_data' };
-                ws.send(JSON.stringify(command));
-            });
-
-            // Gửi dữ liệu đã gán nhãn
-            submitBtn.addEventListener('click', () => {
-                const label = labelInput.value;
-                if (!currentText) {
-                    alert('Please get data first!');
-                    return;
-                }
-                if (!label) {
-                    alert('Please enter a label!');
-                    return;
-                }
-
-                const command = {
-                    action: 'submit_label',
-                    data: {
-                        text: currentText,
-                        label: label
-                    }
-                };
-                ws.send(JSON.stringify(command));
-                labelInput.value = ''; // Xóa ô nhập liệu
-            });
-
-        </script>
-    </body>
-    </html>
-  `;
+// Hàm tạo nonce5
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
 }
 
 // This method is called when your extension is deactivated
