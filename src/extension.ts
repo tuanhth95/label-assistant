@@ -12,47 +12,38 @@ export function activate(context: vscode.ExtensionContext) {
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "label-assistant" is now active!');
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('label-assistant.start', () => {
+	context.subscriptions.push(
+        vscode.commands.registerCommand('label-assistant.start', () => {
+            // Tạo và hiển thị một Webview Panel mới
+            const panel = vscode.window.createWebviewPanel(
+                'labelAssistantPanel',
+                'Labeling Assistant',
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    // Giới hạn webview chỉ được truy cập tài nguyên trong thư mục webview-ui
+                    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view')]
+                }
+            );
 
-		const panel = vscode.window.createWebviewPanel(
-            'labelAssistant',
-            'Labeling Assistant',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                // Chỉ cho phép webview tải tài nguyên từ thư mục webview-ui
-                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view')]
-            }
-        );
-
-        // Cập nhật nội dung webview
-        panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
-	});
-
-	context.subscriptions.push(disposable);
+            // Gán nội dung HTML cho webview
+            panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
+        })
+    );
 }
 
-function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
-    // Lấy đường dẫn đến các file trên đĩa
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     const webviewUiPath = vscode.Uri.joinPath(extensionUri, 'view');
     const htmlPath = vscode.Uri.joinPath(webviewUiPath, 'index.html');
     const cssUri = vscode.Uri.joinPath(webviewUiPath, 'main.css');
     const scriptUri = vscode.Uri.joinPath(webviewUiPath, 'main.js');
     
-    // Chuyển các đường dẫn trên đĩa thành URI mà webview có thể hiểu được
     const styleWebviewUri = webview.asWebviewUri(cssUri);
     const scriptWebviewUri = webview.asWebviewUri(scriptUri);
-
-    // Tạo một nonce để cho phép các script cụ thể được chạy
     const nonce = getNonce();
 
-    // Đọc nội dung file HTML
     let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
 
-    // Thay thế các biến giữ chỗ trong HTML bằng các giá trị đúng
     htmlContent = htmlContent
         .replace('{{cspSource}}', webview.cspSource)
         .replace(/{{nonce}}/g, nonce)
@@ -62,8 +53,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
     return htmlContent;
 }
 
-// Hàm tạo nonce5
-function getNonce() {
+function getNonce(): string {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     for (let i = 0; i < 32; i++) {

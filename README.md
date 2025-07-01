@@ -7,6 +7,7 @@ label data from remote server
 ### setup ssh tunneling
 open new cmd and type: `ssh -L 8765:localhost:8765 <user>@<sshserver>` and type password
 not stop ssh session
+move file server.ipynb to server and run
 ### debug extension
 ```
 cd label-assistant

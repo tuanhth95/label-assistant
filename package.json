@@ -16,10 +16,38 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "labeling-assistant-container",
+          "title": "Labeling Assistant",
+          "icon": "images/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "labeling-assistant-container": [
+        {
+          "id": "labeling-assistant-view",
+          "name": "Actions"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "label-assistant.start",
+          "when": "view == labeling-assistant-view",
+          "group": "navigation",
+          "icon": "$(open-preview)"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "label-assistant.start",
-        "title": "Start Labeling Assistant"
+        "title": "Start Labeling Session",
+        "icon": "$(open-preview)"
       }
     ]
   },
