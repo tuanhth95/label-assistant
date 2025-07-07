@@ -3,8 +3,8 @@
   "displayName": "Labeling Assistant",
   "description": "An extension to label data from a remote server.",
   "version": "0.0.1",
-  "publisher": "NOUH",  
-  "icon": "images/icon.png", 
+  "publisher": "NOUH",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.101.0"
   },
@@ -28,26 +28,24 @@
     "views": {
       "labeling-assistant-container": [
         {
-          "id": "labeling-assistant-view",
-          "name": "Actions"
-        }
-      ]
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "label-assistant.start",
-          "when": "view == labeling-assistant-view",
-          "group": "navigation",
-          "icon": "$(open-preview)"
+          "id": "mainActionsView",
+          "name": "Main Actions",
+          "type": "tree"
         }
       ]
     },
     "commands": [
       {
-        "command": "label-assistant.start",
-        "title": "Start Labeling Session",
-        "icon": "$(open-preview)"
+        "command": "labeling.start",
+        "title": "Start Labeling Process"
+      },
+      {
+        "command": "labeling.showChart",
+        "title": "Show Performance Chart"
+      },
+      {
+        "command": "labeling.submitLabel",
+        "title": "Submit a Label"
       }
     ]
   },
@@ -60,14 +58,18 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.101.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/vscode": "^1.101.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
-    "eslint": "^9.25.1",
-    "typescript": "^5.8.3",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.25.1",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.18.3"
   }
 }

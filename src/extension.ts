@@ -1,59 +1,133 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import WebSocket = require('ws');
+import { MainActionsProvider } from './mainActionsProvider';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+// Biến toàn cục để lưu trữ kết nối WebSocket và panel biểu đồ
+let ws: WebSocket | null = null;
+let chartPanel: vscode.WebviewPanel | undefined = undefined;
+
 export function activate(context: vscode.ExtensionContext) {
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "label-assistant" is now active!');
+    // 1. Đăng ký provider cho sidebar
+    const mainActionsProvider = new MainActionsProvider();
+    vscode.window.registerTreeDataProvider('mainActionsView', mainActionsProvider);
 
-	context.subscriptions.push(
-        vscode.commands.registerCommand('label-assistant.start', () => {
-            // Tạo và hiển thị một Webview Panel mới
-            const panel = vscode.window.createWebviewPanel(
-                'labelAssistantPanel',
-                'Labeling Assistant',
-                vscode.ViewColumn.One,
-                {
-                    enableScripts: true,
-                    // Giới hạn webview chỉ được truy cập tài nguyên trong thư mục webview-ui
-                    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view')]
+    // 2. Đăng ký lệnh "Start"
+    context.subscriptions.push(
+        vscode.commands.registerCommand('labeling.start', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                vscode.window.showInformationMessage('Already connected.');
+                return;
+            }
+            
+            vscode.window.showInformationMessage('Connecting to server...');
+            ws = new WebSocket('ws://localhost:8765');
+
+            ws.on('open', () => {
+                vscode.window.showInformationMessage('✅ Connected! Sending start command...');
+                // Gửi lệnh bắt đầu tới server
+                ws?.send(JSON.stringify({ action: 'start_process' }));
+            });
+
+            ws.on('message', (message: string) => {
+                const data = JSON.parse(message);
+                
+                console.log("Received data to label:", data);
+                // Log dữ liệu cần gán nhãn ra console
+                if (data.type === 'data_to_label') {
+                    vscode.window.showInformationMessage(`Received sample to label with ID: ${data.payload.id}`);
                 }
-            );
+                else if (data.type === 'evaluation_result') {
+                    if (chartPanel) {
+                        // Nếu tab biểu đồ đang mở, gửi dữ liệu đến nó
+                        chartPanel.webview.postMessage(data);
+                    } else {
+                        // Nếu chưa mở, thông báo cho người dùng
+                        vscode.window.showInformationMessage('Received evaluation result. Open the chart view to see it.');
+                    }
+                }
+            });
 
-            // Gán nội dung HTML cho webview
-            panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
+            ws.on('error', (error) => {
+                console.error('WebSocket Error:', error);
+                vscode.window.showErrorMessage(`WebSocket Error: ${error.message}`);
+            });
+
+            ws.on('close', () => {
+                vscode.window.showInformationMessage('Disconnected from server.');
+                ws = null;
+            });
+        })
+    );
+
+    // 3. Đăng ký lệnh "Show Chart"
+    context.subscriptions.push(
+        vscode.commands.registerCommand('labeling.showChart', () => {
+            if (chartPanel) {
+                chartPanel.reveal(vscode.ViewColumn.One);
+            } else {
+                chartPanel = vscode.window.createWebviewPanel(
+                    'performanceChart', 
+                    'Model Performance', 
+                    vscode.ViewColumn.One, 
+                    { 
+                        enableScripts: true,
+                        // Thêm dòng này để cho phép tải file từ thư mục 'view'
+                        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view')]
+                    }
+                );
+                // Cập nhật cách gọi hàm getWebviewContent
+                chartPanel.webview.html = getWebviewContent(chartPanel.webview, context.extensionUri, 'chart');
+                chartPanel.onDidDispose(() => chartPanel = undefined, null, context.subscriptions);
+            }
+        })
+    );
+    // Đăng ký lệnh "Submit Label"
+    context.subscriptions.push(
+        vscode.commands.registerCommand('labeling.submitLabel', async () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                vscode.window.showErrorMessage('Not connected to the server.');
+                return;
+            }
+
+            const sampleId = await vscode.window.showInputBox({ prompt: 'Enter the ID of the sample you are labeling' });
+            if (!sampleId) return;
+
+            const summary = await vscode.window.showInputBox({ prompt: `Enter the summary for sample ID: ${sampleId}` });
+            if (!summary) return;
+
+            const messageToServer = {
+                action: 'submit_label',
+                payload: { id: sampleId, summary: summary }
+            };
+            ws.send(JSON.stringify(messageToServer));
+            vscode.window.showInformationMessage(`Label for ${sampleId} submitted!`);
         })
     );
 }
 
-function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-    const webviewUiPath = vscode.Uri.joinPath(extensionUri, 'view');
-    const htmlPath = vscode.Uri.joinPath(webviewUiPath, 'index.html');
-    const cssUri = vscode.Uri.joinPath(webviewUiPath, 'main.css');
-    const scriptUri = vscode.Uri.joinPath(webviewUiPath, 'main.js');
+// Hàm helper để lấy nội dung cho webview
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, viewType: 'chart'): string {
+    const viewPath = vscode.Uri.joinPath(extensionUri, 'view', viewType);
+    const htmlPath = vscode.Uri.joinPath(viewPath, `${viewType}.html`);
     
-    const styleWebviewUri = webview.asWebviewUri(cssUri);
-    const scriptWebviewUri = webview.asWebviewUri(scriptUri);
+    // Tạo URI hợp lệ cho các file tài nguyên
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(viewPath, `${viewType}.js`));
+    
     const nonce = getNonce();
-
     let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
 
-    htmlContent = htmlContent
-        .replace('{{cspSource}}', webview.cspSource)
-        .replace(/{{nonce}}/g, nonce)
-        .replace('{{styleUri}}', styleWebviewUri.toString())
-        .replace('{{scriptUri}}', scriptWebviewUri.toString());
-
+    // Thay thế các biến giữ chỗ
+    htmlContent = htmlContent.replace(/{{nonce}}/g, nonce)
+        .replace(/{{cspSource}}/g, webview.cspSource)
+        .replace(/{{scriptUri}}/g, scriptUri.toString());
+        
     return htmlContent;
 }
 
-function getNonce(): string {
+function getNonce() {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     for (let i = 0; i < 32; i++) {
@@ -62,5 +136,4 @@ function getNonce(): string {
     return text;
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}

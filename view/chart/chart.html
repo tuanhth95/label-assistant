@@ -1,0 +1,28 @@
+<!-- 
+=========================================================================
+ File: view/chart/chart.html (Extension)
+ Cập nhật: Sửa lại CSP để cho phép tải script từ CDN.
+=========================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- SỬA LỖI: Thêm https://cdn.jsdelivr.net vào script-src -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; img-src {{cspSource}} https:; script-src 'nonce-{{nonce}}' https://cdn.jsdelivr.net;">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Performance</title>
+    <style>
+        body, html { margin: 0; padding: 20px; height: 100%; box-sizing: border-box; }
+        .chart-container { position: relative; height: 80vh; width: 80vw; }
+    </style>
+</head>
+<body>
+    <h1>Model Performance Over Rounds</h1>
+    <div class="chart-container">
+        <canvas id="performanceChart"></canvas>
+    </div>
+    <script nonce="{{nonce}}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+</body>
+</html>
