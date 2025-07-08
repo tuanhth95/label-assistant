@@ -12,7 +12,10 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:label-assistant.start"
+    "onCommand:label-assistant.start",
+    "onView:mainActionsView",
+    "onView:dataTreeView",
+    "onCustomEditor:labeling.customEditor"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -31,9 +34,26 @@
           "id": "mainActionsView",
           "name": "Main Actions",
           "type": "tree"
+        },
+        {
+          "id": "dataTreeView",
+          "name": "Data",
+          "type": "tree"
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "labeling.customEditor",
+        "displayName": "Label Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.lbl"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "commands": [
       {
         "command": "labeling.start",
@@ -44,10 +64,20 @@
         "title": "Show Performance Chart"
       },
       {
-        "command": "labeling.submitLabel",
-        "title": "Submit a Label"
+        "command": "labeling.submitBatch",
+        "title": "Submit Labeled Batch",
+        "icon": "$(check-all)"
       }
-    ]
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "labeling.submitBatch",
+          "when": "view == dataTreeView && viewItem == iteration",
+          "group": "inline"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
