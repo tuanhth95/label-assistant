@@ -45,6 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
             ws = new WebSocket('ws://localhost:8765');
             ws.on('open', () => {
                 vscode.window.showInformationMessage('✅ Connected! Requesting first batch...');
+                chartDataHistory = [];
                 ws?.send(JSON.stringify({ action: 'start_process' }));
             });
             ws.on('message', (message: string) => {
