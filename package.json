@@ -67,6 +67,10 @@
         "command": "labeling.submitBatch",
         "title": "Submit Labeled Batch",
         "icon": "$(check-all)"
+      },
+      {
+        "command": "labeling.setApiKey",
+        "title": "Set OpenAI API Key"
       }
     ],
     "menus": {

@@ -16,6 +16,7 @@ import WebSocket = require('ws');
 import { MainActionsProvider } from './mainActionsProvider';
 import { DataTreeProvider } from './dataTreeProvider';
 import { CustomLabelEditorProvider } from './customLabelEditorProvider';
+import { saveApiKey } from './openaiService';
 
 let ws: WebSocket | null = null;
 let chartPanel: vscode.WebviewPanel | undefined = undefined;
@@ -130,6 +131,19 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             chartPanel.onDidDispose(() => { chartPanel = undefined; }, null, context.subscriptions);
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('labeling.setApiKey', async () => {
+            const apiKey = await vscode.window.showInputBox({
+                prompt: "Enter your OpenAI API Key",
+                password: true,
+                ignoreFocusOut: true
+            });
+            if (apiKey) {
+                saveApiKey(apiKey);
+                vscode.window.showInformationMessage("OpenAI API Key saved successfully.");
+            }
         })
     );
 }

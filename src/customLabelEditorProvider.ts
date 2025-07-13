@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DataTreeProvider } from './dataTreeProvider';
-
+import { generateSummary, getApiKey } from './openaiService';
 export class CustomLabelEditorProvider implements vscode.CustomTextEditorProvider {
     public static register(context: vscode.ExtensionContext, dataProvider: DataTreeProvider): vscode.Disposable {
         const provider = new CustomLabelEditorProvider(context, dataProvider);
@@ -45,7 +45,7 @@ export class CustomLabelEditorProvider implements vscode.CustomTextEditorProvide
 
         webviewPanel.webview.html = this._getHtmlForWebview(webviewPanel.webview, document.getText(), prevFile, nextFile);
 
-        webviewPanel.webview.onDidReceiveMessage(message => {
+        webviewPanel.webview.onDidReceiveMessage(async message => {
             switch (message.command) {
                 case 'submit':
                     const updatedContent = { ...JSON.parse(document.getText()), anchor_text: message.text };
@@ -57,6 +57,30 @@ export class CustomLabelEditorProvider implements vscode.CustomTextEditorProvide
                     if (message.filePath) {
                         vscode.commands.executeCommand('vscode.open', vscode.Uri.file(message.filePath));
                         webviewPanel.dispose(); // Đóng panel hiện tại
+                    }
+                    break;
+                case 'gen-summary':
+                    // console.log('[DEBUG] Received "gen-summary" command from webview.');
+                    
+                    const apiKey = getApiKey();
+                    // console.log(`[DEBUG] API Key check. Found: ${!!apiKey}`);
+
+                    if (!apiKey) {
+                        console.log('[DEBUG] API Key is missing. Showing info message.');
+                        vscode.window.showInformationMessage("No API key. Please run the 'Set OpenAI API Key' command first.");
+                        webviewPanel.webview.postMessage({ command: 'summary-generation-failed' });
+                        return;
+                    }
+
+                    console.log('[DEBUG] API Key found. Calling generateSummary...');
+                    try {
+                        const summary = await generateSummary(message.text, apiKey);
+                        console.log('[DEBUG] Summary generated successfully.');
+                        webviewPanel.webview.postMessage({ command: 'summary-generated', text: summary });
+                    } catch (error: any) {
+                        console.error('[DEBUG] Error during summary generation:', error);
+                        vscode.window.showErrorMessage(error.message);
+                        webviewPanel.webview.postMessage({ command: 'summary-generation-failed' });
                     }
                     break;
             }
@@ -87,7 +111,11 @@ export class CustomLabelEditorProvider implements vscode.CustomTextEditorProvide
                         </div>
                     </div>
                     <div class="w-1/2 flex flex-col">
-                        <h2 class="text-lg font-semibold mb-2">Your Summary</h2>
+                        <div class="flex justify-between items-center mb-2">
+                            <h2 class="text-lg font-semibold">Your Summary</h2>
+                            <!-- // Nút "Gen summary" mới -->
+                            <button id="gen-summary-btn" class="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700">Gen Summary</button>
+                        </div>
                         <textarea id="summary-input" class="flex-grow bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="Enter your summary here..."></textarea>
                     </div>
                 </main>
