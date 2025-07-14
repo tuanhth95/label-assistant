@@ -9,7 +9,7 @@ import json
 import logging
 import os
 
-from config import MODE, WEBSOCKET_HOST, WEBSOCKET_PORT, RunConfig, TestConfig
+from config import MODE, WEBSOCKET_HOST, WEBSOCKET_PORT, RUN_CONFIG_DEFAULT, TEST_CONFIG_DEFAULT
 from active_learning_engine import ActiveLearningEngine
 from test_engine import TestActiveLearningEngine
 
@@ -41,7 +41,6 @@ async def handler(websocket):
             # 2. Xử lý khi người dùng bắt đầu hoặc tiếp tục
             if action == "start_with_new_config" or action == "continue_process":
                 config_payload = command.get("config")
-                
                 # Lưu config mới
                 with open(CONFIG_FILE_PATH, 'w') as f:
                     json.dump(config_payload, f, indent=4)
