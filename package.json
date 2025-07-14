@@ -56,8 +56,12 @@
     ],
     "commands": [
       {
-        "command": "labeling.start",
-        "title": "Start Labeling Process"
+        "command": "labeling.connect",
+        "title": "Connect to Server"
+      },
+      {
+        "command": "labeling.disconnect",
+        "title": "Disconnect to Server"
       },
       {
         "command": "labeling.showChart",
@@ -71,6 +75,10 @@
       {
         "command": "labeling.setApiKey",
         "title": "Set OpenAI API Key"
+      },
+      {
+        "command": "labeling.openProcessView",
+        "title": "Start/Continue Process"
       }
     ],
     "menus": {

@@ -1,0 +1,54 @@
+<!-- 
+=========================================================================
+ Version: 3.8
+ File: view/process/process.html (Cập nhật - Extension)
+ Mục đích: Thêm nonce và cspSource để tăng cường bảo mật.
+=========================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{cspSource}}; script-src 'nonce-{{nonce}}';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Process Configuration</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; box-sizing: border-box; }
+        input:disabled { background-color: #f0f0f0; }
+        .actions { margin-top: 30px; }
+    </style>
+</head>
+<body data-config='{{configData}}'>
+    <h1 id="view-title"></h1>
+    <form id="config-form">
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="name">Process Name</label>
+                <input type="text" id="name">
+            </div>
+            <div class="form-group">
+                <label for="budget">Budget</label>
+                <input type="number" id="budget">
+            </div>
+            <div class="form-group">
+                <label for="models">Model</label>
+                <select id="models"></select>
+            </div>
+            <div class="form-group">
+                <label for="select_strategies">Query Strategy</label>
+                <select id="select_strategies"></select>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit" id="main-action-btn"></button>
+            <button type="button" id="end-btn" style="background-color: #dc3545; color: white;">End Process</button>
+        </div>
+    </form>
+    
+    <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+</body>
+</html>

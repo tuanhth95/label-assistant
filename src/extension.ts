@@ -1,12 +1,12 @@
 /*
 =========================================================================
- Version: 1.5
- File: src/extension.ts (Cập nhật lớn - Extension)
- Mục đích: Sửa lỗi lệnh "showChart" và thêm logic vô hiệu hóa nút submit.
+ Version: 3.8
+ File: src/extension.ts (Cập nhật - Extension)
+ Mục đích: Sửa lỗi không tải được script trong Process View.
  Thay đổi:
- - Sửa lại hoàn toàn logic tạo Webview Panel cho biểu đồ.
- - Trong lệnh `submitBatch`, tạo một file `.submitted` để đánh dấu
-   vòng lặp đã được gửi đi.
+ - Cập nhật hàm `getProcessWebviewContent` để nhận `webview` làm tham số.
+ - Sử dụng `webview.asWebviewUri` để tạo đường dẫn script hợp lệ.
+ - Thêm `nonce` và cập nhật CSP cho `process.html` để tăng cường bảo mật.
 =========================================================================
 */
 import * as vscode from 'vscode';
@@ -16,10 +16,13 @@ import WebSocket = require('ws');
 import { MainActionsProvider } from './mainActionsProvider';
 import { DataTreeProvider } from './dataTreeProvider';
 import { CustomLabelEditorProvider } from './customLabelEditorProvider';
+import { StateConfig } from './types';
 import { saveApiKey } from './openaiService';
 
 let ws: WebSocket | null = null;
+let processPanel: vscode.WebviewPanel | undefined = undefined;
 let chartPanel: vscode.WebviewPanel | undefined = undefined;
+let serverConfig: StateConfig | null = null;
 let chartDataHistory: any[] = [];
 
 function getWorkspacePath(): string | undefined {
@@ -32,43 +35,94 @@ function getWorkspacePath(): string | undefined {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    const workspaceRoot = getWorkspacePath();
-    const dataProvider = new DataTreeProvider(workspaceRoot);
+    const dataProvider = new DataTreeProvider(getWorkspacePath());
+    const mainActionsProvider = new MainActionsProvider();
 
-    vscode.window.registerTreeDataProvider('mainActionsView', new MainActionsProvider());
+    vscode.window.registerTreeDataProvider('mainActionsView', mainActionsProvider);
     vscode.window.registerTreeDataProvider('dataTreeView', dataProvider);
     context.subscriptions.push(CustomLabelEditorProvider.register(context, dataProvider));
 
-    // Lệnh "Start"
     context.subscriptions.push(
-        vscode.commands.registerCommand('labeling.start', () => {
+        vscode.commands.registerCommand('labeling.connect', () => {
             if (ws && ws.readyState === WebSocket.OPEN) { return; }
-            ws = new WebSocket('ws://localhost:8765');
+            ws = new WebSocket('ws://localhost:12345');
+
             ws.on('open', () => {
-                vscode.window.showInformationMessage('✅ Connected! Requesting first batch...');
-                chartDataHistory = [];
-                ws?.send(JSON.stringify({ action: 'start_process' }));
+                vscode.window.showInformationMessage('✅ Connected to server!');
+                mainActionsProvider.refresh(true, false);
             });
+
             ws.on('message', (message: string) => {
                 const command = JSON.parse(message);
                 console.log("Received from server:", command);
-                if (command.type === 'data_batch') {
+
+                if (command.type === 'config_data') {
+                    serverConfig = command.payload;
+                    mainActionsProvider.refresh(true, true);
+                } else if (command.type === 'no_config') {
+                    serverConfig = null;
+                    mainActionsProvider.refresh(true, false);
+                } else if (command.type === 'data_batch') {
                     handleDataBatch(command.payload, dataProvider);
                 } else if (command.type === 'evaluation_result') {
-                    if (chartPanel) {
-                        // Nếu tab biểu đồ đang mở, gửi dữ liệu đến nó
-                        chartPanel.webview.postMessage(command);
-                    } else {
-                        // Nếu chưa mở, thông báo cho người dùng
-                        vscode.window.showInformationMessage('Received evaluation result. Open the chart view to see it.');
-                    }
                     chartDataHistory.push(command);
+                    if (chartPanel) {
+                        chartPanel.webview.postMessage(command);
+                    }
                 }
+            });
+            ws.on('close', (code, reason) => {
+                console.log(`[DEBUG] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+                vscode.window.showWarningMessage('Disconnected from server.');
+                mainActionsProvider.refresh(false, false);
+                serverConfig = null;
+                ws = null;
+            });
+            ws.on('error', (error) => {
+                console.error(`[DEBUG] WebSocket error:`, error);
+                vscode.window.showErrorMessage(`WebSocket Error: ${error.message}`);
             });
         })
     );
     
-    // Lệnh "Submit Batch"
+    context.subscriptions.push(
+        vscode.commands.registerCommand('labeling.openProcessView', () => {
+            if (processPanel) {
+                processPanel.reveal();
+                return;
+            }
+            processPanel = vscode.window.createWebviewPanel(
+                'processConfig', 'Process Configuration', vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view')]
+                }
+            );
+            // Sửa lại cách gọi hàm
+            processPanel.webview.html = getProcessWebviewContent(processPanel.webview, context.extensionUri, serverConfig);
+            
+            processPanel.webview.onDidReceiveMessage(message => {
+                if (message.action === 'start_with_new_config') {
+                    const workspaceRoot = getWorkspacePath();
+                    if(workspaceRoot) {
+                        const labelingDir = path.join(workspaceRoot, '.labeling');
+                        if (fs.existsSync(labelingDir)) {
+                            fs.rmSync(labelingDir, { recursive: true, force: true });
+                            dataProvider.refresh();
+                            vscode.window.showInformationMessage("Cleared old .labeling directory.");
+                        }
+                    }
+                    ws?.send(JSON.stringify(message));
+                    processPanel?.dispose();
+                } else if (message.action === 'continue_process' || message.action === 'end_process') {
+                     ws?.send(JSON.stringify(message));
+                     processPanel?.dispose();
+                }
+            });
+            processPanel.onDidDispose(() => { processPanel = undefined; });
+        })
+    );
+    
     context.subscriptions.push(
         vscode.commands.registerCommand('labeling.submitBatch', (iterationItem: vscode.TreeItem) => {
             const iterDir = iterationItem.resourceUri?.fsPath;
@@ -103,8 +157,6 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`Batch for ${iterationItem.label} submitted successfully!`);
         })
     );
-
-    // Lệnh "Show Chart"
     context.subscriptions.push(
         vscode.commands.registerCommand('labeling.showChart', () => {
             const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
@@ -113,12 +165,10 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             chartPanel = vscode.window.createWebviewPanel(
-                'performanceChart',
-                'Model Performance',
-                column || vscode.ViewColumn.One,
+                'performanceChart', 'Model Performance', column || vscode.ViewColumn.One,
                 {
                     enableScripts: true,
-                    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view', 'chart')],
+                    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'view')],
                     retainContextWhenHidden: true
                 }
             );
@@ -146,7 +196,44 @@ export function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('labeling.disconnect', () => {
+            // Chỉ cần kiểm tra và gọi close.
+            // Sự kiện 'close' ở trên sẽ tự động xử lý phần còn lại.
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            } else {
+                vscode.window.showInformationMessage('Already disconnected.');
+            }
+        })
+    );
+
 }
+
+// =========================================================================
+// HÀM ĐƯỢC SỬA LỖI
+// =========================================================================
+function getProcessWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, config: StateConfig | null): string {
+    const viewPath = vscode.Uri.joinPath(extensionUri, 'view', 'process');
+    const htmlPath = vscode.Uri.joinPath(viewPath, 'process.html');
+    
+    // Sử dụng asWebviewUri để tạo đường dẫn hợp lệ
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(viewPath, 'process.js'));
+    const nonce = getNonce();
+    let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
+    
+    const configString = JSON.stringify(config);
+    const escapedConfig = configString.replace(/'/g, '&apos;');
+
+    htmlContent = htmlContent
+        .replace(/{{nonce}}/g, nonce)
+        .replace(/{{cspSource}}/g, webview.cspSource)
+        .replace(/{{scriptUri}}/g, scriptUri.toString())
+        .replace('{{configData}}', escapedConfig);
+
+    return htmlContent;
+}
+
 
 function handleDataBatch(payload: any, dataProvider: DataTreeProvider) {
     const { iteration, samples } = payload;
