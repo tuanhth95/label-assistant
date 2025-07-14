@@ -31,6 +31,6 @@ class RunConfig:
     
 # --- Cấu hình cho chế độ "TEST" ---
 class TestConfig:
-    TOTAL_SAMPLES = 20
-    BATCH_SIZE = 5
+    TOTAL_SAMPLES = 10
+    BATCH_SIZE = 4
     SIMULATED_TRAIN_DELAY = 2 # Giây
